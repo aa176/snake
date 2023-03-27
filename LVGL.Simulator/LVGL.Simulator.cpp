@@ -8,6 +8,7 @@
  * DEVELOPER: Mouri_Naruto (Mouri_Naruto AT Outlook.com)
  */
 
+#include "my_test.h"
 #include <Windows.h>
 
 #include "resource.h"
@@ -25,6 +26,52 @@
 #include "lvgl/examples/lv_examples.h"
 #include "lvgl/demos/lv_demos.h"
 #include "lv_drivers/win32drv/win32drv.h"
+
+
+//头插法
+void Snake_Node_End_Add(Snake_List_T* head, Snake_Node_Info_T tmp);
+
+//创建节点
+Snake_Node_T* Snake_Node_Create(Snake_Node_Info_T new_node);
+
+Snake_Node_T* Snake_Node_Create(Snake_Node_Info_T new_node) {
+    Snake_Node_Info_T* new_node_info = (Snake_Node_Info_T*)malloc(sizeof(Snake_Node_Info_T));
+    new_node_info->x = new_node.x;
+    new_node_info->y = new_node.y;
+
+    //lv_malloc
+
+    Snake_Node_T* terurn_node = (Snake_Node_T*)malloc(sizeof(Snake_Node_T));
+    terurn_node->next = NULL;
+    terurn_node->pre = NULL;
+    terurn_node->data = new_node_info;
+    return terurn_node;
+}
+
+void Snake_Node_End_Add(Snake_List_T* head, Snake_Node_Info_T new_node) {
+    //创建新节点
+    Snake_Node_T* node = Snake_Node_Create(new_node);
+
+    //printf(" node->x %d  node->y %d\n",  ((Snake_Node_Info_T *)(node->data))->x, ((Snake_Node_Info_T*)(node->data))->y);
+    Snake_Node_T* tmp = head->next;
+    if (head == NULL)
+    {
+        return;
+    }
+    //尾插
+    if (head->count == 0)
+    {
+        head->next = node;
+        head->pre = node;
+        head->count++;
+    }
+    else {
+        head->next->next = node;
+        node->pre = head->next;
+        head->next = node;
+        head->count++;
+    }
+}
 
 #if _MSC_VER >= 1200
 // Restore compilation warnings.
@@ -51,6 +98,8 @@ bool single_display_mode_initialization()
 }
 
 #include <process.h>
+#include <lv_drivers/indev/keyboard.h>
+
 
 HANDLE g_window_mutex = NULL;
 bool g_initialization_status = false;
@@ -160,15 +209,437 @@ bool multiple_display_mode_initialization()
 //    lv_label_set_text_fmt(label, "%d", lv_slider_get_value(slider));
 //    lv_obj_align_to(label, slider, LV_ALIGN_OUT_TOP_MID, 0, -15);    /*Align top of the slider*/
 //}
+//
 
+//网格页面指针
+lv_obj_t* cont;
+
+//网格样式
+static lv_style_t style_cont_child;
+//蛇头
+Snake_List_T* head = NULL;
+
+//蛇吃的食物
+Snake_Node_Info_T* food = NULL;
+
+//记录当前的状态等
+pos_change_t pos_c = { 0 };
+
+//void snaker_status_to_n(pos_change_t* pos_all) {
+//    pos_t* head = pos_all->snack;
+//    pos_change_t* p = pos_all;
+//
+//
+//    while (p->snack != NULL)
+//    {
+//        p->snack->change_flag = 'n';
+//        
+//        p->snack = p->snack->next;
+//    }
+//    pos_all->snack = head;
+//}
+
+//建立一个9*9网格
+void init_page(lv_obj_t** cont) {
+    //row 
+    static lv_coord_t col_dsc[ROW] = { 0 };
+    static lv_coord_t row_dsc[COL] = { 0 };
+    //
+    for (uint32_t i = 0; i < sizeof(col_dsc) / sizeof(short) - 1; i++)
+    {
+        col_dsc[i] = 25;
+    } 
+    col_dsc[ROW - 1] = LV_GRID_TEMPLATE_LAST;
+
+    for (uint32_t i = 0; i < sizeof(row_dsc) / sizeof(short) - 1; i++)
+    {
+        row_dsc[i] = 25;
+    } 
+    row_dsc[COL - 1] = LV_GRID_TEMPLATE_LAST;
+
+    *cont = lv_obj_create(lv_scr_act());
+    //进行赋值cont指针赋值
+    pos_c.cont = *cont;
+
+    lv_obj_set_style_grid_column_dsc_array(*cont, col_dsc, 0);
+    lv_obj_set_style_grid_row_dsc_array(*cont, row_dsc, 0);
+    lv_group_add_obj(lv_group_get_default(), *cont);
+    lv_group_focus_obj(*cont);
+
+         
+
+    //lv_obj_set_size(cont, 800, 750);
+    lv_obj_center(*cont);
+    lv_obj_set_layout(*cont, LV_LAYOUT_GRID);
+
+    lv_obj_t* obj;
+    lv_obj_t* label;
+
+
+    //设置背景颜色
+    static lv_style_t style_obj;
+    lv_style_init(&style_obj);
+    //lv_style_set_bg_color(&style_obj, lv_color_hex(0xFFFFFF));
+
+    lv_obj_set_style_pad_row(*cont, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(*cont, 0, LV_PART_MAIN);
+
+    for (uint32_t i = 0; i < ROW; i++)
+    {
+        for (uint32_t j = 0; j < COL; j++)
+        {
+            obj = lv_obj_create(*cont);
+            //lv_obj_add_style(obj, &style_obj, LV_STATE_DEFAULT);
+
+            lv_obj_set_size(obj, 40, 40);
+            //obj = lv_btn_create(cont);
+
+            lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_STRETCH, j, 1, LV_GRID_ALIGN_STRETCH, i, 1);
+
+            //lv_label_set_text_fmt(label, "%d-%d", col + 1, row + 1);
+            //lv_obj_center(label);
+            //printf("i = %d\n", i);
+        }
+    }
+
+}
+
+void show_page(lv_obj_t* cont, Snake_List_T* snacker);
+void my_timer1(lv_timer_t* timer)
+{
+    static uint32_t count = 0;
+    pos_change_t* user_data = (pos_change_t*)(timer->user_data);  
+    //printf("my_timer called with user data: %d\n", *user_data);
+    //printf("user_data = %d\n ", (*user_data).dirction);
+    /*Do something with LVGL*/
+
+    //printf(" %d s\n", count);
+    //回调前，状态置为n
+    //snaker_status_to_n(user_data);
+    //改变位置
+    (*user_data).chang_pos(user_data);
+    //printf(" my_timer1 : x = %d, y = %d \n", (*user_data).snack->x, (*user_data).snack->y);
+    /*if (count % 5 == 0)
+    {
+        
+    }*/
+    change_page(cont, &style_cont_child, head);
+    count++; 
+}
+
+void my_timer2(lv_timer_t* timer) {
+    //lv_obj_t * user_data = (lv_obj_t *)(timer->user_data);
+    
+}
+static void clicked(lv_event_t* e) {
+    
+    static lv_style_t style_btn;
+    lv_style_init(&style_btn);
+    lv_style_set_bg_color(&style_btn, lv_color_hex(0xFFFFFF));
+
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* label = (lv_obj_t*)lv_event_get_user_data(e);
+    //lv_obj_remove_style_all(label);
+    //printf("test!\n");
+    lv_obj_add_style(label, &style_btn, LV_STATE_DEFAULT);
+    
+    lv_obj_get_style_bg_color(label, LV_PART_MAIN);
+}
+//键盘事件
+static void keypad_event(lv_event_t* e) {
+    int key = 0;
+    lv_event_code_t code = lv_event_get_code(e);
+    pos_change_t* now_pos = (pos_change_t *)lv_event_get_user_data(e);
+    if (code == LV_EVENT_KEY)
+    {
+        key = lv_indev_get_key(lv_indev_get_act());
+        /*key = 119  = 115 key = 97 key = 100*/
+        //printf("key2 = %d\n", key);
+        switch (key)
+        {
+        case 119:
+            (*now_pos).dirction = top;
+            break;
+        case 115:
+            (*now_pos).dirction = bottom;
+            break;
+        case 97:
+            (*now_pos).dirction = left;
+            break;
+        case 100:
+            (*now_pos).dirction = right;
+            break;
+
+        default:
+            break;
+        }
+        printf("(*now_pos).dirction = %d\n", (*now_pos).dirction);
+        printf("%d   %d    %d   %d \n", top, bottom, left, right);
+        printf("key2 = %d\n", key);
+        
+    }
+    //lv_obj_remove_style_all(label);
+}
+
+static void event_cb(lv_event_t* e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* label = (lv_obj_t*)lv_event_get_user_data(e);
+    int key = 0;
+    switch (code) {
+    case LV_EVENT_PRESSED:
+        lv_label_set_text(label, "The last button event:\nLV_EVENT_PRESSED");
+        break;
+    case LV_EVENT_CLICKED:
+        lv_label_set_text(label, "The last button event:\nLV_EVENT_CLICKED");
+        break;
+    case LV_EVENT_LONG_PRESSED:
+        lv_label_set_text(label, "The last button event:\nLV_EVENT_LONG_PRESSED");
+        break;
+    case LV_EVENT_LONG_PRESSED_REPEAT:
+        lv_label_set_text(label, "The last button event:\nLV_EVENT_LONG_PRESSED_REPEAT");
+        break;
+
+    case LV_EVENT_KEY:
+        key = lv_indev_get_key(lv_indev_get_act());
+        //printf("key = %d\n", key);
+        break;
+    default:
+        //printf("%d\n" ,lv_event_get_code(e));
+        break;
+    }
+}
+
+#define BTN_NUM 10
+
+//蛇初始化
+void init_snaker(Snake_List_T **head) {
+    //初始化头节点
+    *head = (Snake_List_T*)malloc(sizeof(Snake_List_T));
+    (*head)->next = NULL;
+    (*head)->pre = NULL;
+    (*head)->count = 0; 
+}
+
+//食物初始化
+void init_food() {
+    /*food = (pos_t *)malloc(sizeof(struct postion));
+    food->x = ROW / 2;
+    food->y = COL / 2;*/
+}
+void chang_pos(pos_change_t* pos_all);
+
+void init_now_status() {
+    pos_c.dirction = right;
+    pos_c.snack = head;
+    pos_c.chang_pos = chang_pos;
+}
+
+//位置的改变
+void Snake_Postion_Change(pos_change_t* pos_all);
+
+void Snake_Postion_Change(pos_change_t* pos_all) {
+
+    switch (pos_all->dirction)
+    {
+    case right:
+        if (((Snake_Node_Info_T*)(pos_all->snack->next->data))->x >= 0 && ((Snake_Node_Info_T*)(pos_all->snack->next->data))->x < (ROW -2) )
+        {
+            ((Snake_Node_Info_T*)(pos_all->snack->next->data))->x += 1;
+            //printf("x = %d  y = %d\n", ((Snake_Node_Info_T*)(pos_all->snack->next->data))->x, ((Snake_Node_Info_T*)(pos_all->snack->next->data))->y);
+        }
+        break;
+    case left:
+        if (((Snake_Node_Info_T*)(pos_all->snack->next->data))->x > 0 && ((Snake_Node_Info_T*)(pos_all->snack->next->data))->x <= (ROW -2) )
+        {
+            ((Snake_Node_Info_T*)(pos_all->snack->next->data))->x -= 1;
+            //printf("x = %d  y = %d\n", ((Snake_Node_Info_T*)(pos_all->snack->next->data))->x, ((Snake_Node_Info_T*)(pos_all->snack->next->data))->y);
+        }
+        break;
+    case top:
+        if (((Snake_Node_Info_T*)(pos_all->snack->next->data))->y > 0 && ((Snake_Node_Info_T*)(pos_all->snack->next->data))->y <= (COL - 2))
+        {
+            ((Snake_Node_Info_T*)(pos_all->snack->next->data))->y -= 1;
+            //printf("x = %d  y = %d\n", ((Snake_Node_Info_T*)(pos_all->snack->next->data))->x, ((Snake_Node_Info_T*)(pos_all->snack->next->data))->y);
+        }
+        break;
+
+    case bottom:
+        if (((Snake_Node_Info_T*)(pos_all->snack->next->data))->y >= 0 && ((Snake_Node_Info_T*)(pos_all->snack->next->data))->y < (COL - 2))
+        {
+            ((Snake_Node_Info_T*)(pos_all->snack->next->data))->y += 1;
+            //printf("x = %d  y = %d\n", ((Snake_Node_Info_T*)(pos_all->snack->next->data))->x, ((Snake_Node_Info_T*)(pos_all->snack->next->data))->y);
+        }
+        break;
+    }
+}
+//蛇移动
+void Snake_Move(pos_change_t* pos_all);
+void Snake_Move(pos_change_t* pos_all) {
+
+    Snake_List_T* snake = pos_all->snack;
+
+    if (snake->count == 0 )
+    {
+        return;
+    }
+    //等于1的时候，需要不断改变位置
+    if (snake->count == 1)
+    {
+        Snake_Postion_Change(pos_all);
+        return;
+    }
+    //等于2的时候，需要头增加
+    if (snake->count == 2)
+    {
+        Snake_Postion_Change(pos_all);
+        return;
+    }
+    //大于2的时候，需要头增加，尾删除
+    if (snake->count > 2)
+    {
+        Snake_Postion_Change(pos_all);
+        return;
+    }
+
+}
+void chang_pos(pos_change_t* pos_all) {
+    //Snake_List_T* head = pos_all->snack;
+    //pos_change_t* p = pos_all;
+
+    Snake_Move(pos_all);
+    //pos_all->snack = head;
+
+}
+void show_page(lv_obj_t *cont, Snake_List_T* snacker) {
+    Snake_List_T* p = snacker;
+
+    //样式设置
+    //static lv_style_t style_child;
+    //lv_style_init(&style_child);
+    //lv_style_set_bg_color(&style_child, lv_color_hex(0xFF0000));
+    
+
+    /*while (p != NULL)
+    {
+        lv_obj_add_style(lv_obj_get_child(cont, (p->x )  + p->y * (COL - 1) + 1 ), &style_child, LV_STATE_DEFAULT);
+        lv_obj_set_size(lv_obj_get_child(cont, (p->x) + p->y * (COL - 1) + 1), 40, 40);
+        p = p->next;
+    }*/
+
+}
+
+static int n;
 int main()
 {
     lv_init();
 
+    
     if (!single_display_mode_initialization())
     {
         return -1;
     }
+
+    //初始化
+    init_food();
+
+    lv_style_init(&style_cont_child);
+    //lv_style_set_bg_color(&style_cont_child, lv_color_hex(0xff0000));
+    //lv_style_set_bg_opa(&style_cont_child, LV_OPA_50);
+    //lv_style_set_border_width(&style_cont_child, 2);
+    //lv_style_set_border_color(&style_cont_child, lv_color_black());
+
+    //lv_style_set_x(&style_cont_child, 25);
+    //lv_style_set_y(&style_cont_child, 25);
+    //lv_style_set
+    init_snaker(&head);
+    //添加两个节点
+    Snake_Node_Info_T a1 ;
+    a1.x = 4;
+    a1.y = 4;
+
+    Snake_Node_End_Add(head, a1);
+
+    /*Snake_Node_Info_T a2 ;
+    a2.x = 3;
+    a2.y = 3;
+    Snake_Node_End_Add(head, a2);*/
+
+    init_now_status();
+
+    init_page(&cont);
+    lv_obj_set_size(cont, 500, 500);
+
+    //添加事件
+    lv_obj_add_event_cb(cont, keypad_event, LV_EVENT_ALL, &pos_c);
+
+    //改变颜色
+    change_page(cont, &style_cont_child, head);
+
+    ////样式设置
+    //static lv_style_t style_child2;
+    //lv_style_init(&style_child2);
+    //lv_style_set_bg_color(&style_child2, lv_color_hex(0xFF0000));
+    //for (uint32_t i = 0; i < ROW; i++)
+    //{
+    //    for (uint32_t j = 0; j < COL; j++)
+    //    {
+    //        lv_obj_add_style(lv_obj_get_child(cont, i + j * (COL - 1) + 1), &style_child2, LV_STATE_DEFAULT);
+    //        //Sleep(2);
+    //    }
+    //}
+
+    /*static lv_style_t style_obj2;
+    lv_style_init(&style_obj2);
+    lv_style_set_bg_color(&style_obj2, lv_color_hex(0xFF0000));
+    if (lv_obj_get_child(cont, 2) != NULL)
+    {
+        printf("lv_obj_get_child()\n");
+    }*/
+    //lv_obj_add_style(lv_obj_get_child(cont, 2), &style_obj2, LV_STATE_DEFAULT);
+
+    //lv_obj_invalidate(lv_obj_get_child(cont, 2));
+    //lv_obj_t* btn1 = lv_btn_create(lv_scr_act());
+
+    //lv_obj_set_size(screen, 400, 500);
+
+    //lv_obj_set_size(btn1, 100, 50);
+
+    //lv_obj_t* cont2 = lv_obj_create(lv_scr_act());
+    //lv_obj_set_flex_flow(cont2, LV_FLEX_FLOW_ROW);
+    //lv_obj_t *btn1 = lv_btn_create(cont2);
+    //
+    //lv_obj_t* label1 = lv_label_create(cont2);
+    ////lv_obj_add_event_cb(btn1, clicked, LV_EVENT_CLICKED, lv_obj_get_child(cont, 2));
+
+    //lv_label_set_text(label1, "label1\n");
+
+    //printf("lv_obj_get_parent: %s\n", lv_obj_get_parent(btn1)->h_layout);
+    //btn样式
+    //static lv_style_t style_btn;
+    //lv_style_init(&style_btn);
+    //lv_style_set_bg_color(&style_btn, lv_color_hex(0xff0000));
+    //lv_style_set_bg_opa(&style_btn, LV_OPA_50);
+    //lv_style_set_border_width(&style_btn, 2);
+    //lv_style_set_border_color(&style_btn, lv_color_black());
+
+    //lv_obj_add_style(btn1, &style_btn, LV_STATE_PRESSED);  /*overwrite only some colors to red when pressed*/
+
+    //lv_obj_t* info_label = lv_label_create(lv_scr_act());
+    //lv_label_set_text(info_label, "The last button event:\nNone");
+    //lv_obj_add_event_cb(btn1, event_cb, LV_EVENT_ALL, info_label);
+
+
+    //定时器
+    static uint32_t user_data = 10;
+    lv_timer_t* timer = lv_timer_create(my_timer1, 500, &pos_c);
+
+    //lv_timer_t* timer = lv_timer_create(my_timer2, 500, cont);
+
+
+
+
+
 
     /*if (!multiple_display_mode_initialization())
     {
@@ -313,12 +784,12 @@ int main()
     // Demos from lv_examples
     // ----------------------------------
 
-    lv_demo_widgets();           // ok
+    //lv_demo_widgets();           // ok
     //lv_demo_benchmark();
-    // lv_demo_keypad_encoder();    // ok
-    // lv_demo_music();             // removed from repository
+    //lv_demo_keypad_encoder();    // ok
+    //lv_demo_music();             // removed from repository
     // lv_demo_printer();           // removed from repository
-    // lv_demo_stress();            // ok
+    //lv_demo_stress();            // ok
 
     // ----------------------------------
     // LVGL examples
